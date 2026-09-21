@@ -9,9 +9,7 @@ public class ShowList : MonoBehaviour
 
     void Start()
     {
-        // Plaats hier je Cues
-        Cue.SocketAan(2f,3);
-        Cue.SpeelGeluid(3f,3, "StereoTest", Kant.RECHTS);
-       Cue.SocketUit(6f,3);
+        Cue.SpeelGeluidOpUitgangen(1f, "StereoTest", Kant.RECHTS, 4);
+        Cue.SpeelGeluidOpUitgangen(1f, "StereoTest", Kant.BEIDE, 3);
     }
 }
