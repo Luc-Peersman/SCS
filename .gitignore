@@ -31,3 +31,9 @@ Thumbs.db
 
 # Asset meta-data mag GEEN ignore krijgen, .meta bestanden altijd meecommitten
 !*.meta
+
+# Betaalde/licentie-gevoelige asset-packs, niet publiek herdistribueren (ook hun .meta's)
+Horror Elements/
+Horror Elements.meta
+Art By Kandles/
+Art By Kandles.meta

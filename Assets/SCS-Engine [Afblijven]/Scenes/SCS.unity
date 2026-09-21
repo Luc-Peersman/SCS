@@ -131,7 +131,7 @@ GameObject:
   - component: {fileID: 136443596}
   - component: {fileID: 136443595}
   m_Layer: 5
-  m_Name: SCS
+  m_Name: Node1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
