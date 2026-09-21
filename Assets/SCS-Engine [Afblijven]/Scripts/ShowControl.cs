@@ -6,9 +6,9 @@
 //   Start() (of vanuit eender welk script) een hele reeks acties inplannen,
 //   elk met een eigen tijdstip en een eigen doel-Node:
 //
-//      Event.ZetServo(2, 3, 45);   // na 2 s: Node 3, servo naar 45°
-//      Event.ZetServo(5, 1, 80);   // na 5 s: Node 1, servo naar 80°
-//      Event.SocketAan(3, 2);      // na 3 s: Node 2, stekkerdoos AAN
+//      Cue.ZetServo(2, 3, 45);   // na 2 s: Node 3, servo naar 45°
+//      Cue.ZetServo(5, 1, 80);   // na 5 s: Node 1, servo naar 80°
+//      Cue.SocketAan(3, 2);      // na 3 s: Node 2, stekkerdoos AAN
 //
 //   Elke regel plant zijn eigen actie in — de tijden zijn onafhankelijk van
 //   elkaar (dus GEEN "wacht op de vorige stap"), gewoon "op tijdstip X vanaf
@@ -16,12 +16,13 @@
 //
 //  HOE GEBRUIK JE HET:
 //   1) Maak één (leeg) GameObject en sleep dit ShowControl-script erop.
-//      (er mag er maar ÉÉN in de scene staan — via 'Event' kun je hem overal
+//      (er mag er maar ÉÉN in de scene staan — via 'Cue' kun je hem overal
 //      aanspreken zonder een referentie te moeten slepen)
 //   2) De SerialController wordt automatisch gevonden (of sleep hem zelf in
 //      het veld 'Verbinding').
-//   3) Typ je tijdlijn in Start() als 'Event.<methode>(...)', of roep de
-//      methodes vanuit een eigen script aan.
+//   3) Typ je tijdlijn in Start() als 'Cue.<methode>(...)'. Doe je dit vanuit
+//      een ANDER script (zoals ShowList.cs), zet dan bovenaan dat script
+//      'using static ShowControl;' — anders herkent C# de naam 'Cue' niet.
 //
 //  Werkt samen met SerialController (V003-protocol).
 // ============================================================================
@@ -29,26 +30,29 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-[RequireComponent(typeof(AudioSource))]
 public class ShowControl : MonoBehaviour
 {
-    /// Wereldwijde toegang: vanuit eender welk script/methode gebruik je "Event.ZetServo(...)".
-    public static ShowControl Event { get; private set; }
+    /// Wereldwijde toegang: vanuit eender welk script/methode gebruik je "Cue.ZetServo(...)".
+    public static ShowControl Cue { get; private set; }
 
     [Header("Verbinding (leeg laten = zelf zoeken)")]
     [Tooltip("De SerialController in de scene. Laat dit leeg; dan zoekt ShowControl hem automatisch.")]
     public SerialController verbinding;
 
+    [Header("Tijdlijn (ShowList-script waar de Geluiden-lijst in staat)")]
+    [Tooltip("Het ShowList-script (bv. op GameObject 'ShowFile'). Laat dit leeg; dan zoekt ShowControl hem automatisch.")]
+    public ShowList tijdlijn;
+
     [System.Serializable]
     public class Geluid
     {
-        [Tooltip("De naam die je gebruikt in Event.Speelgeluid(tijd, naam).")]
+        [Tooltip("De naam die je gebruikt in Cue.SpeelGeluid(tijd, uitgang, naam, kant).")]
         public string naam;
         public AudioClip clip;
+        [Range(0f, 1f)]
+        [Tooltip("Volume van dit geluid — handig om verschillende clips op elkaar af te stemmen.")]
+        public float volume = 1f;
     }
-
-    [Header("Geluiden (geef elk geluid een naam en sleep er een AudioClip op)")]
-    public List<Geluid> geluiden = new List<Geluid>();
 
     [System.Serializable]
     public class NodeAfbeelding
@@ -72,23 +76,26 @@ public class ShowControl : MonoBehaviour
         new NodeAfbeelding { naam = "Node8" },
     };
 
-    AudioSource audioBron;
+    [Header("Audio-router (ASIO, voor SpeelGeluid)")]
+    [Tooltip("Naam (of deel van de naam) van de ASIO-driver, zoals te zien in je ASIO-instellingen.")]
+    public string asioDriverNaam = "Focusrite USB ASIO";
+    [Tooltip("Sample rate waarop de ASIO-driver staat ingesteld (zie Focusrite Control 2).")]
+    public int asioSampleRate = 48000;
 
-    void Start(){
-        ShowList();
-    }
-
+    AsioUitgangRouter uitgangRouter;
 
     void Awake()
     {
-        if (Event != null && Event != this)
+        if (Cue != null && Cue != this)
         {
             Debug.LogWarning("[ShowControl] Er staat al een ShowControl in de scene — deze extra wordt genegeerd.", this);
             Destroy(this);
             return;
         }
-        Event = this;
-        audioBron = GetComponent<AudioSource>();
+        Cue = this;
+
+        uitgangRouter = new AsioUitgangRouter();
+        uitgangRouter.Start(asioDriverNaam, asioSampleRate);
 
         foreach (NodeAfbeelding n in nodeAfbeeldingen)
             if (n.afbeelding != null) n.afbeelding.SetActive(false);
@@ -100,11 +107,17 @@ public class ShowControl : MonoBehaviour
         if (verbinding == null)
             Debug.LogError("[ShowControl] Geen SerialController in de scene gevonden. " +
                            "Zet er één in de scene, of sleep hem in het veld 'Verbinding'.", this);
+
+        if (tijdlijn == null) tijdlijn = FindFirstObjectByType<ShowList>();
+        if (tijdlijn == null)
+            Debug.LogError("[ShowControl] Geen ShowList in de scene gevonden. " +
+                           "Zet dat script ergens in de scene, of sleep het in het veld 'Tijdlijn'.", this);
     }
 
     void OnDestroy()
     {
-        if (Event == this) Event = null;
+        if (Cue == this) Cue = null;
+        uitgangRouter?.Dispose();
     }
 
     // ════════════════ Tijdlijn-acties — plan hier je show mee in ════════════════
@@ -152,23 +165,81 @@ public class ShowControl : MonoBehaviour
         Plan(tijd, node, addr => verbinding.Ident(addr));
     }
 
-    /// Speelt na 'tijd' seconden het geluid met de gegeven naam af (zie de lijst 'Geluiden' in de Inspector).
-    public void Speelgeluid(float tijd, string naamVanGeluid)
+    /// Speelt na 'tijd' seconden het geluid met de gegeven naam af op Scarlett-uitgang 'uitgang'.
+    /// 'kant' bepaalt welk kanaal van het (eventueel stereo) bronbestand wordt gebruikt — bij een
+    /// mono bronbestand maakt 'kant' niet uit. Kant.BEIDE mixt links en rechts samen tot één mono signaal.
+    public void SpeelGeluid(float tijd, int uitgang, string naamVanGeluid, Kant kant)
     {
-        StartCoroutine(WachtEnSpeelGeluid(Mathf.Max(0f, tijd), naamVanGeluid));
+        SpeelGeluidOpUitgangen(tijd, naamVanGeluid, kant, uitgang);
     }
 
-    IEnumerator WachtEnSpeelGeluid(float tijd, string naam)
+    /// Speelt na 'tijd' seconden hetzelfde geluid gelijktijdig af op meerdere uitgangen — bv.
+    /// Cue.SpeelGeluidOpUitgangen(1f, "Beam", Kant.RECHTS, 3, 4);
+    public void SpeelGeluidOpUitgangen(float tijd, string naamVanGeluid, Kant kant, params int[] uitgangen)
+    {
+        StartCoroutine(WachtEnSpeelGeluidOpUitgangen(Mathf.Max(0f, tijd), naamVanGeluid, kant, uitgangen));
+    }
+
+    /// Stopt na 'tijd' seconden het geluid dat op 'uitgang' speelt. Speelt er niets, dan gebeurt er niets.
+    public void StopGeluid(float tijd, int uitgang)
+    {
+        StartCoroutine(WachtEnStopGeluidOpUitgang(Mathf.Max(0f, tijd), uitgang));
+    }
+
+    IEnumerator WachtEnStopGeluidOpUitgang(float tijd, int uitgang)
+    {
+        if (tijd > 0f) yield return new WaitForSeconds(tijd);
+        uitgangRouter?.StopOpKanaal(uitgang);
+    }
+
+    IEnumerator WachtEnSpeelGeluidOpUitgangen(float tijd, string naam, Kant kant, int[] uitgangen)
     {
         if (tijd > 0f) yield return new WaitForSeconds(tijd);
 
-        Geluid gevonden = geluiden.Find(g => string.Equals(g.naam, naam, System.StringComparison.OrdinalIgnoreCase));
+        if (tijdlijn == null)
+        {
+            Debug.LogError("[ShowControl] Geen ShowList gekoppeld — kan de Geluiden-lijst niet opzoeken.", this);
+            yield break;
+        }
+        Geluid gevonden = tijdlijn.geluiden.Find(g => string.Equals(g.naam, naam, System.StringComparison.OrdinalIgnoreCase));
         if (gevonden == null || gevonden.clip == null)
         {
             Debug.LogWarning($"[ShowControl] Geluid '{naam}' niet gevonden — controleer de lijst 'Geluiden' in de Inspector.", this);
             yield break;
         }
-        audioBron.PlayOneShot(gevonden.clip);
+        if (uitgangRouter == null || !uitgangRouter.IsActief)
+        {
+            Debug.LogError("[ShowControl] ASIO-uitgangrouter is niet actief — controleer 'asioDriverNaam'.", this);
+            yield break;
+        }
+
+        float[] mono = HaalKanaalUit(gevonden.clip, kant);
+        mono = AudioResampler.Resample(mono, gevonden.clip.frequency, uitgangRouter.SampleRate);
+        if (gevonden.volume != 1f)
+            for (int i = 0; i < mono.Length; i++) mono[i] *= gevonden.volume;
+        uitgangRouter.SpeelOpKanalen(mono, uitgangen);
+    }
+
+    float[] HaalKanaalUit(AudioClip clip, Kant kant)
+    {
+        float[] alle = new float[clip.samples * clip.channels];
+        clip.GetData(alle, 0);
+
+        if (clip.channels == 1) return alle;
+
+        float[] mono = new float[clip.samples];
+        if (kant == Kant.BEIDE)
+        {
+            for (int i = 0; i < clip.samples; i++)
+                mono[i] = 0.5f * (alle[i * clip.channels + 0] + alle[i * clip.channels + 1]);
+        }
+        else
+        {
+            int gekozenIndex = kant == Kant.LINKS ? 0 : 1;
+            for (int i = 0; i < clip.samples; i++)
+                mono[i] = alle[i * clip.channels + gekozenIndex];
+        }
+        return mono;
     }
 
     // Simuleert in de Scene wat er bij een Node gebeurt: zet de bijbehorende afbeelding
@@ -242,19 +313,4 @@ public class ShowControl : MonoBehaviour
                        "Zet er één in de scene of vul het veld 'Verbinding' in.", this);
         return false;
     }
-
-    void ShowList()
-    {
-        Event.SocketAan(1f,1);
-        Event.ZetServo(2f,1,30);
-        Event.ZetServo(4f,1,60);
-        Event.ZetServo(6f,1,90);
-
-        Event.SocketUit(8f,1);
-        Event.SocketAan(3f,2);
-        Event.SocketUit(6f,2);
-        Event.Speelgeluid(5f,"Shh");
-        Event.Speelgeluid(2f,"Piano");
-    }
-    
 }
