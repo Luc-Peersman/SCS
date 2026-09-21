@@ -6,9 +6,9 @@ Geen game, maar een **Unity-applicatie die fysieke hardware aanstuurt en test**:
 van ESP32-gebaseerde "Nodes" (servo's, stopcontacten/relais, IR-zenders, digitale pinnen,
 knoppen), verbonden via een seriële link met een centrale "Nexus"-microcontroller.
 
-Gezien de aanwezige assets (`Assets/Horror Elements/`, `Assets/Art By Kandles/Halloween Icons/`,
-een "Save Room") is dit vermoedelijk bedoeld voor een horror/escape-room-achtige installatie
-(licht, geluid, servo's en stopcontacten op cue aangestuurd).
+Gezien de aanwezige assets (`Horror Elements/`, `Art By Kandles/Halloween Icons/`, een "Save Room")
+is dit vermoedelijk bedoeld voor een horror/escape-room-achtige installatie (licht, geluid,
+servo's en stopcontacten op cue aangestuurd).
 
 Het project is tegelijk **lesmateriaal**: de scripts bevatten uitgebreide Nederlandstalige
 onderwijscommentaren ("HOE GEBRUIK JE HET (3 stappen)", "Studenten zien dit niet"), bedoeld als
@@ -47,27 +47,48 @@ de documentatie.
   - `ShowControl` — statische `Cue`-API voor tijdlijn/cue-based scripting
   - `ShowList` — datalijst van geluiden + voorbeeld-tijdlijn
   - `ShowLogger` / `ShowControlTester` — diagnostiek en QA
-- Let op: `Assets/Scripts/Esp32Serial2.cs` (klasse `EspSerial2`) is **dode/ongebruikte code**.
+- Let op: `Esp32Serial2.cs` (klasse `EspSerial2`) is **dode/ongebruikte code**.
   Geverifieerd: alleen `SerialController` staat als component in `SCS.unity` (op COM6,
   115200 baud) en wordt aangeroepen door `ShowManager`, `ShowNode`, `ShowControl`,
   `ShowControlTester` en `ShowLogger`. `EspSerial2` komt nergens voor in scenes, prefabs, of
   andere scripts — een geïsoleerd prototype dat nooit is ingebouwd in de showpijplijn. Kan
   vermoedelijk verwijderd/gearchiveerd worden.
-- `Assets/Scenes/_Recovery/0.unity` is een Unity auto-recovery bestand, geen bewuste scene.
+- `_Recovery/0.unity` is een Unity auto-recovery bestand, geen bewuste scene.
+
+## Let op: mapstructuur is niet wat de naam doet vermoeden
+
+Bijna alle scripts, de scene, en de art-assets zitten niet direct onder `Assets/Scripts` of
+`Assets/Scenes`, maar onder **`Assets/SCS-Engine [Afblijven]/`**. Ondanks de naam ("afblijven" =
+handen af) is dit **geen oude back-up** — het is de actieve, huidige projectmap (bevat de meest
+recente versie van `ShowControl.cs` met o.a. `SpeelGeluidOpUitgangen`, en de enige echte scene).
+Alleen `ShowList.cs` staat los in `Assets/Scripts/` (nieuwste editie daarvan, met een
+`SpeelGeluidOpUitgangen`-test op uitgangen 3/4).
+
+Dit is op 2026-09-21/22 per ongeluk verward met een wegwerp-backup en tijdelijk buiten `Assets/`
+verplaatst — wat het project brak (missende scriptreferenties). Niet nog eens doen: verplaats of
+verwijder niets onder `SCS-Engine [Afblijven]/` zonder eerst te checken of het de enige kopie is
+van een script/scene (zie git-log rond commit `5ab078b` voor de details van dat incident).
 
 ## Belangrijkste bestanden
 
 | Bestand | Rol |
 |---|---|
-| `Assets/Scripts/SerialController.cs` | Kern: seriële verbinding + protocol-parsing, events |
-| `Assets/Scripts/ShowControl.cs` | Cue/tijdlijn-systeem + ASIO-audio-integratie |
-| `Assets/Scripts/ShowNode.cs` | Per-node component met Inspector-events |
-| `Assets/Scripts/ShowManager.cs` | Overzicht/ping van alle nodes |
-| `Assets/Scripts/ShowList.cs` | Datalijst van geluiden + voorbeeld-tijdlijn |
-| `Assets/Scripts/ShowControlTester.cs` | OnGUI testdashboard + zelftest |
-| `Assets/Scripts/ShowLogger.cs` | Console-logging van alle node-events |
-| `Assets/Scripts/AsioUitgangRouter.cs` | NAudio/ASIO multichannel audio-routing |
-| `Assets/Scripts/AudioResampler.cs` | Resampling van audioclips naar ASIO-samplerate |
-| `Assets/Scripts/Esp32Serial2.cs` | Alternatieve/oudere seriële implementatie |
-| `Assets/Scenes/SCS.unity` | De enige "echte" scene |
+| `Assets/SCS-Engine [Afblijven]/Scripts/SerialController.cs` | Kern: seriële verbinding + protocol-parsing, events |
+| `Assets/SCS-Engine [Afblijven]/Scripts/ShowControl.cs` | Cue/tijdlijn-systeem + ASIO-audio-integratie |
+| `Assets/SCS-Engine [Afblijven]/Scripts/ShowNode.cs` | Per-node component met Inspector-events |
+| `Assets/SCS-Engine [Afblijven]/Scripts/ShowManager.cs` | Overzicht/ping van alle nodes |
+| `Assets/Scripts/ShowList.cs` | Datalijst van geluiden + voorbeeld-tijdlijn (enige script buiten de Afblijven-map) |
+| `Assets/SCS-Engine [Afblijven]/Scripts/ShowControlTester.cs` | OnGUI testdashboard + zelftest |
+| `Assets/SCS-Engine [Afblijven]/Scripts/ShowLogger.cs` | Console-logging van alle node-events |
+| `Assets/SCS-Engine [Afblijven]/Scripts/AsioUitgangRouter.cs` | NAudio/ASIO multichannel audio-routing |
+| `Assets/SCS-Engine [Afblijven]/Scripts/AudioResampler.cs` | Resampling van audioclips naar ASIO-samplerate |
+| `Assets/SCS-Engine [Afblijven]/Scripts/Esp32Serial2.cs` | Alternatieve/oudere seriële implementatie |
+| `Assets/SCS-Engine [Afblijven]/Scenes/SCS.unity` | De enige "echte" scene |
 | `Packages/manifest.json` | Package-dependencies |
+
+## Git / GitHub
+
+- Publiek gepubliceerd op **https://github.com/Luc-Peersman/SCS** (main branch).
+- `Horror Elements/` en `Art By Kandles/` (onder `SCS-Engine [Afblijven]/`) zijn licentie-gevoelige
+  asset-packs en staan sinds 2026-09-22 in `.gitignore` — ze worden niet meer meegecommit, maar
+  zitten nog wel in oudere git-historie (bewust niet herschreven).
