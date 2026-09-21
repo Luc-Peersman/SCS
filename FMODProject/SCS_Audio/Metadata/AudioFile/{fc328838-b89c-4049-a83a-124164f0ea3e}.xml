@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="AudioFile" id="{fc328838-b89c-4049-a83a-124164f0ea3e}">
+		<property name="assetPath">
+			<value>Hit_Drama.wav</value>
+		</property>
+		<property name="frequencyInKHz">
+			<value>44.0999985</value>
+		</property>
+		<property name="channelCount">
+			<value>2</value>
+		</property>
+		<property name="length">
+			<value>6.1250113378684805</value>
+		</property>
+		<relationship name="masterAssetFolder">
+			<destination>{b50592db-dee6-4f46-a653-b5824d77f471}</destination>
+		</relationship>
+	</object>
+</objects>
