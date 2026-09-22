@@ -25,7 +25,17 @@ de documentatie.
 - **Multichannel audio-routing buiten Unity's eigen audio-engine om**: afspelen per ASIO-kanaal
   (bv. Focusrite Scarlett uit 3/4), met kanaalselectie (`Kant`: LINKS/RECHTS/BEIDE) en
   automatische resampling wanneer de samplerate van de clip niet overeenkomt met de ASIO-
-  samplerate.
+  samplerate. Is er geen ASIO-interface aangesloten (bv. een student op eigen laptop), dan doet
+  `SpeelGeluid`/`SpeelGeluidOpUitgangen` gewoon niets — geen foutmelding, alleen een `Debug.Log`.
+- **Lokaal testen zonder Scarlett**: `Cue.SpeelGeluidLokaal(tijd, naam, kant)` speelt af via een
+  gewone Unity `AudioSource` op het ShowControl-GameObject (2D, `spatialBlend = 0`, dus niet
+  afhankelijk van scene-positie). Let op: `Kant` betekent hier iets **anders** dan bij
+  `SpeelGeluid`/`SpeelGeluidOpUitgangen` (die blijven ongewijzigd, kanaalextractie voor ASIO):
+  - `BEIDE` → gewone stereoweergave, ongewijzigd (links → linkerbox, rechts → rechterbox).
+  - `LINKS`/`RECHTS` → het VOLLEDIGE geluid (links- en rechterkanaal samengevoegd) alleen uit die
+    ene box; de andere box blijft stil. Wordt per aanroep als verse stereo-`AudioClip` opgebouwd
+    (niet via `AudioSource.panStereo`), zodat overlappende geluiden met verschillende `Kant`
+    elkaars panning niet beïnvloeden.
 - **Testdashboard** (`ShowControlTester`, OnGUI): live online/offline-status per node, losse
   knoppen (servo/socket/pin/IR/ping/stat/ident) en een geautomatiseerde zelftest met
   PASS/FAIL-rapportage.
