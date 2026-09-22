@@ -84,6 +84,10 @@ public class ShowControl : MonoBehaviour
 
     AsioUitgangRouter uitgangRouter;
 
+    [Header("Lokale audio (testen zonder Scarlett/ASIO — bv. op je eigen laptop)")]
+    [Tooltip("AudioSource voor Cue.SpeelGeluidLokaal. Laat leeg; wordt automatisch aangemaakt op dit GameObject.")]
+    public AudioSource lokaleAudioBron;
+
     void Awake()
     {
         if (Cue != null && Cue != this)
@@ -96,6 +100,13 @@ public class ShowControl : MonoBehaviour
 
         uitgangRouter = new AsioUitgangRouter();
         uitgangRouter.Start(asioDriverNaam, asioSampleRate);
+
+        if (lokaleAudioBron == null) lokaleAudioBron = GetComponent<AudioSource>();
+        if (lokaleAudioBron == null) lokaleAudioBron = gameObject.AddComponent<AudioSource>();
+        lokaleAudioBron.playOnAwake = false;
+        // 2D geluid: geen positie-gebaseerde panning/verzwakking, zodat elk kanaal altijd
+        // even hard op beide boxjes klinkt, ongeacht waar dit GameObject in de scene staat.
+        lokaleAudioBron.spatialBlend = 0f;
 
         foreach (NodeAfbeelding n in nodeAfbeeldingen)
             if (n.afbeelding != null) n.afbeelding.SetActive(false);
@@ -180,6 +191,69 @@ public class ShowControl : MonoBehaviour
         StartCoroutine(WachtEnSpeelGeluidOpUitgangen(Mathf.Max(0f, tijd), naamVanGeluid, kant, uitgangen));
     }
 
+    /// Speelt na 'tijd' seconden het geluid met de gegeven naam af via de normale audio-uitgang van
+    /// deze computer (geen Scarlett/ASIO nodig) — handig om je tijdlijn te testen op je eigen laptop.
+    /// Bij Kant.BEIDE hoor je gewone stereoweergave (links/rechts ongewijzigd). Bij Kant.LINKS of
+    /// Kant.RECHTS hoor je het VOLLEDIGE geluid (links- en rechterkanaal samengevoegd) uit slechts
+    /// één box — de andere box blijft stil.
+    public void SpeelGeluidLokaal(float tijd, string naamVanGeluid, Kant kant)
+    {
+        StartCoroutine(WachtEnSpeelGeluidLokaal(Mathf.Max(0f, tijd), naamVanGeluid, kant));
+    }
+
+    IEnumerator WachtEnSpeelGeluidLokaal(float tijd, string naam, Kant kant)
+    {
+        if (tijd > 0f) yield return new WaitForSeconds(tijd);
+
+        if (tijdlijn == null)
+        {
+            Debug.LogError("[ShowControl] Geen ShowList gekoppeld — kan de Geluiden-lijst niet opzoeken.", this);
+            yield break;
+        }
+        Geluid gevonden = tijdlijn.geluiden.Find(g => string.Equals(g.naam, naam, System.StringComparison.OrdinalIgnoreCase));
+        if (gevonden == null || gevonden.clip == null)
+        {
+            Debug.LogWarning($"[ShowControl] Geluid '{naam}' niet gevonden — controleer de lijst 'Geluiden' in de Inspector.", this);
+            yield break;
+        }
+
+        if (kant == Kant.BEIDE)
+        {
+            // Normale stereoweergave: niets aanpassen aan het bronbestand.
+            lokaleAudioBron.PlayOneShot(gevonden.clip, gevonden.volume);
+        }
+        else
+        {
+            AudioClip eenzijdig = MaakEenzijdigeClip(gevonden.clip, kant, naam);
+            lokaleAudioBron.PlayOneShot(eenzijdig, gevonden.volume);
+        }
+    }
+
+    // Zet het VOLLEDIGE geluid (links- en rechterkanaal samengevoegd) op één luidsprekerkant:
+    // die kant krijgt het volledige signaal, de andere kant blijft stil. Wordt per aanroep vers
+    // opgebouwd (i.p.v. AudioSource.panStereo) zodat overlappende geluiden met verschillende
+    // Kant elkaars panning niet beïnvloeden.
+    AudioClip MaakEenzijdigeClip(AudioClip bron, Kant kant, string naam)
+    {
+        float[] alle = new float[bron.samples * bron.channels];
+        bron.GetData(alle, 0);
+
+        float[] stereo = new float[bron.samples * 2];
+        int actieveKanaal = kant == Kant.LINKS ? 0 : 1;
+        for (int i = 0; i < bron.samples; i++)
+        {
+            float sample = bron.channels == 1
+                ? alle[i]
+                : 0.5f * (alle[i * bron.channels + 0] + alle[i * bron.channels + 1]);
+            stereo[i * 2 + actieveKanaal] = sample;
+            // de andere kant blijft op 0 (stil) — de array is al met nullen geïnitialiseerd.
+        }
+
+        AudioClip clip = AudioClip.Create($"{naam}_{kant}", bron.samples, 2, bron.frequency, false);
+        clip.SetData(stereo, 0);
+        return clip;
+    }
+
     /// Stopt na 'tijd' seconden het geluid dat op 'uitgang' speelt. Speelt er niets, dan gebeurt er niets.
     public void StopGeluid(float tijd, int uitgang)
     {
@@ -209,7 +283,11 @@ public class ShowControl : MonoBehaviour
         }
         if (uitgangRouter == null || !uitgangRouter.IsActief)
         {
-            Debug.LogError("[ShowControl] ASIO-uitgangrouter is niet actief — controleer 'asioDriverNaam'.", this);
+            // Geen Scarlett/ASIO aangesloten is geen fout (bv. een student die op zijn eigen
+            // laptop oefent) — gewoon niets afspelen. Gebruik Cue.SpeelGeluidLokaal om zonder
+            // audio-interface te testen.
+            Debug.Log($"[ShowControl] Geen ASIO-uitgangrouter actief — '{naam}' wordt niet afgespeeld " +
+                      "op de Scarlett. Gebruik Cue.SpeelGeluidLokaal om lokaal te testen.", this);
             yield break;
         }
 

@@ -32,20 +32,37 @@ public class AsioUitgangRouter : IDisposable
 
         if (gekozenDriver == null)
         {
-            Debug.LogError($"[AsioUitgangRouter] Geen ASIO-driver gevonden die '{driverNaamDeel}' bevat. " +
-                           $"Beschikbaar: {string.Join(", ", drivers)}");
+            // Geen fout — een laptop zonder Scarlett/ASIO-interface is een normale, ondersteunde
+            // situatie (bv. studenten die oefenen met Cue.SpeelGeluidLokaal). Cue.SpeelGeluid(...)
+            // doet dan gewoon niets, zonder foutmelding.
+            Debug.Log($"[AsioUitgangRouter] Geen ASIO-driver gevonden die '{driverNaamDeel}' bevat — " +
+                      "SpeelGeluid/SpeelGeluidOpUitgangen doen niets. Gebruik Cue.SpeelGeluidLokaal " +
+                      "om zonder audio-interface te testen.");
             return false;
         }
 
-        asio = new AsioOut(gekozenDriver);
-        kanaalAantal = asio.DriverOutputChannelCount;
-        var format = WaveFormat.CreateIeeeFloatWaveFormat(sampleRate, kanaalAantal);
-        asio.InitRecordAndPlayback(new RoutingProvider(this, format), 0, sampleRate);
-        asio.Play();
-        IsActief = true;
-        Debug.Log($"[AsioUitgangRouter] ASIO-driver '{gekozenDriver}' actief met {kanaalAantal} " +
-                  $"uitgangskanalen op {sampleRate}Hz.");
-        return true;
+        try
+        {
+            asio = new AsioOut(gekozenDriver);
+            kanaalAantal = asio.DriverOutputChannelCount;
+            var format = WaveFormat.CreateIeeeFloatWaveFormat(sampleRate, kanaalAantal);
+            asio.InitRecordAndPlayback(new RoutingProvider(this, format), 0, sampleRate);
+            asio.Play();
+            IsActief = true;
+            Debug.Log($"[AsioUitgangRouter] ASIO-driver '{gekozenDriver}' actief met {kanaalAantal} " +
+                      $"uitgangskanalen op {sampleRate}Hz.");
+            return true;
+        }
+        catch (System.Exception e)
+        {
+            // Bv. driver wel geïnstalleerd maar interface niet aangesloten/aan. Ook dan geen crash.
+            Debug.Log($"[AsioUitgangRouter] Kon ASIO-driver '{gekozenDriver}' niet starten ({e.Message}) — " +
+                      "SpeelGeluid/SpeelGeluidOpUitgangen doen niets.");
+            asio?.Dispose();
+            asio = null;
+            IsActief = false;
+            return false;
+        }
     }
 
     public void SpeelOpKanaal(float[] samples, int kanaalEenGebaseerd)
