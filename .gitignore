@@ -42,3 +42,14 @@ Hero Fantasy Pack Vol 1.meta
 
 # Projectkennis voor Claude staat buiten de repo (OneDrive)
 CLAUDE.md
+
+# Asset Store-bestanden (ook gratis packs) mogen niet in een publieke repo (Standard EULA).
+# Lokaal blijven ze werken; in de download vervangen door meldingen in de Console.
+Assets/_AssetStore-lokaal/
+Assets/_AssetStore-lokaal.meta
+FMODProject/SCS_Audio/Assets/Hit_*
+FMODProject/SCS_Audio/Metadata/AudioFile/{1f4d5582-111b-4284-ba20-7039efb1ade3}.xml
+FMODProject/SCS_Audio/Metadata/AudioFile/{fc328838-b89c-4049-a83a-124164f0ea3e}.xml
+# Herstelscènes van Unity (na een crash) horen niet in git
+**/_Recovery/
+**/_Recovery.meta

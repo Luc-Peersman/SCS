@@ -29,6 +29,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class ShowControl : MonoBehaviour
 {
@@ -109,7 +110,13 @@ public class ShowControl : MonoBehaviour
         lokaleAudioBron.spatialBlend = 0f;
 
         foreach (NodeAfbeelding n in nodeAfbeeldingen)
-            if (n.afbeelding != null) n.afbeelding.SetActive(false);
+        {
+            if (n.afbeelding == null) continue;
+            n.afbeelding.SetActive(false);
+            // Geen plaatje gekoppeld (bv. omdat het uit de Asset Store kwam en niet in dit project mag
+            // staan)? Dan geen leeg wit vlak tonen; wat er gebeurt, verschijnt als melding in de Console.
+            if (!HeeftPlaatje(n.afbeelding)) VerbergLeegVlak(n.afbeelding);
+        }
     }
 
     void OnEnable()
@@ -338,6 +345,8 @@ public class ShowControl : MonoBehaviour
             yield break;
         }
         afbeelding.SetActive(zichtbaar);
+        if (!HeeftPlaatje(afbeelding))
+            Debug.Log($"[ShowControl] Node{node}: afbeelding {(zichtbaar ? "AAN" : "UIT")} (geen plaatje in dit project, daarom alleen deze melding).", this);
     }
 
     // Draait in de Scene de afbeelding van een Node mee met de servohoek (in graden), zodat
@@ -358,6 +367,21 @@ public class ShowControl : MonoBehaviour
             yield break;
         }
         afbeelding.transform.localRotation = Quaternion.Euler(0f, 0f, hoek);
+        if (!HeeftPlaatje(afbeelding))
+            Debug.Log($"[ShowControl] Node{node}: servo naar {hoek}° (geen plaatje in dit project, daarom alleen deze melding).", this);
+    }
+
+    // Heeft deze Node-afbeelding een plaatje (Sprite)? Zonder plaatje zou Unity een leeg wit vlak tonen.
+    static bool HeeftPlaatje(GameObject afbeelding)
+    {
+        Image image = afbeelding.GetComponent<Image>();
+        return image == null || image.sprite != null;
+    }
+
+    static void VerbergLeegVlak(GameObject afbeelding)
+    {
+        Image image = afbeelding.GetComponent<Image>();
+        if (image != null) image.enabled = false;
     }
 
     GameObject VindNodeAfbeelding(int node)
